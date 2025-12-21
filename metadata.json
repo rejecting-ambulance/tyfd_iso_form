@@ -1,0 +1,7 @@
+{
+  "name": "桃園消防 ISO 事故安全官系統",
+  "description": "專業火場事故安全官(ISO)觀察資訊紀錄與AI分析系統，支援360偵查、MEDIC評估及Mayday紀錄。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
