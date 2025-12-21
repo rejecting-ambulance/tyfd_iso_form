@@ -55,7 +55,7 @@
 
 *   **套件管理**: 使用 `npm`。
 *   **版本控制**: 敏感檔案（如 `.env`）已加入 `.gitignore`，請勿上傳。
-    
+
 ---
 View your app in AI Studio: https://ai.studio/apps/drive/1bUWxcaCWPqttGweaK_S7fhW_lPrzuSrW
  
