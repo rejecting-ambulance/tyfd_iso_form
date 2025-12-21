@@ -27,6 +27,8 @@ export const RISK_OPTIONS = [
 
 export const WEATHER_CONDITIONS = ['晴天', '陰天', '雨天', '強風', '其他'];
 export const GROUND_CONDITIONS = ['平坦', '不平坦', '濕滑', '泥濘', '障礙物', '其他'];
+export const STRUCTURE_OPTIONS = ['RC', '鐵皮', '磚造', '木造', '其他'];
 export const COMMUNICATE_TARGETS = ['未指定', '操作者', '帶隊官', '指揮官'];
+
 
 export const RIT_EQUIPMENT_OPTIONS = ['導引繩', '防護水線', 'TIC', 'Fast Board', 'AirPak'];

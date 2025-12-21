@@ -1,26 +1,29 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Printer, Trash2, Eraser, Info, AlertTriangle, User, Clock, Building, 
-  Flame, Wind, Activity, FileText, Layers, Eye, Camera, XCircle, 
-  ClipboardList, Plus, Sparkles, Siren, CheckSquare, Radio, MessageCircle, 
+import {
+  Printer, Trash2, Eraser, Info, AlertTriangle, User, Clock, Building,
+  Flame, Wind, Activity, FileText, Layers, Eye, Camera, XCircle,
+  ClipboardList, Plus, Sparkles, Siren, CheckSquare, Radio, MessageCircle,
   ShieldAlert, ChevronDown, Edit3, Check, FileDown, Minus
 } from 'lucide-react';
-import { 
-  vibrate, resizeImage, getNowDateTime, formatTimeForDisplay 
+import {
+  vibrate, resizeImage, getNowDateTime, formatTimeForDisplay
 } from './utils';
-import { 
-  FIRE_OPTIONS, SMOKE_COLOR_OPTIONS, ENTRY_OPTIONS, RISK_OPTIONS, 
-  WEATHER_CONDITIONS, GROUND_CONDITIONS, COMMUNICATE_TARGETS, 
-  RIT_EQUIPMENT_OPTIONS 
+import {
+  FIRE_OPTIONS, SMOKE_COLOR_OPTIONS, ENTRY_OPTIONS, RISK_OPTIONS,
+  WEATHER_CONDITIONS, GROUND_CONDITIONS, COMMUNICATE_TARGETS,
+  RIT_EQUIPMENT_OPTIONS, STRUCTURE_OPTIONS
 } from './constants';
+
 import { FormDataState, ReconSide, MedicRecord, MaydayLog } from './types';
 import { generateISOAnalysis, generateMedicAnalysis } from './geminiService';
 
+import html2pdf from 'html2pdf.js';
+
 // --- Shared Components ---
 
-const SectionTitle: React.FC<{ 
-  icon?: any, title: string, className?: string, colorClass?: string, borderClass?: string 
+const SectionTitle: React.FC<{
+  icon?: any, title: string, className?: string, colorClass?: string, borderClass?: string
 }> = ({ icon: Icon, title, className = "", colorClass = "text-orange-600", borderClass = "border-orange-600" }) => (
   <div className={`flex items-center gap-2 border-b-2 ${borderClass} pb-2 mb-4 mt-6 print:border-black print:mt-4 ${className} break-inside-avoid`}>
     {Icon && <Icon className={`w-6 h-6 ${colorClass} print:hidden`} />}
@@ -29,7 +32,7 @@ const SectionTitle: React.FC<{
 );
 
 const InputField: React.FC<{
-  label?: string, value: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, 
+  label?: string, value: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
   placeholder?: string, type?: string, className?: string, width?: string, suffix?: string, inputMode?: any,
   step?: string, readOnly?: boolean
 }> = ({ label, value, onChange, placeholder, type = "text", className = "", width = "w-full", suffix, inputMode, step, readOnly }) => (
@@ -56,7 +59,7 @@ const InputField: React.FC<{
 );
 
 const StepperInput: React.FC<{
-  label?: string, value: string, onChange: (val: string) => void, 
+  label?: string, value: string, onChange: (val: string) => void,
   step?: number, suffix?: string, min?: number, className?: string,
   placeholder?: string
 }> = ({ label, value, onChange, step = 1, suffix, min = 0, className = "", placeholder }) => {
@@ -71,9 +74,9 @@ const StepperInput: React.FC<{
     <div className={`flex flex-col ${className}`}>
       {label && <label className="text-sm font-bold text-gray-700 mb-1 print:text-black">{label}</label>}
       <div className="flex items-stretch border border-gray-300 rounded-lg overflow-hidden shadow-sm bg-white print:border-none">
-        <input 
+        <input
           type="number"
-          value={value || ''}
+          value={value || '0'}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className="flex-1 px-3 py-2 text-base text-black font-bold focus:outline-none min-w-0 bg-white print:p-0 print:text-sm appearance-none"
@@ -84,14 +87,14 @@ const StepperInput: React.FC<{
           </span>
         )}
         <div className="flex border-l border-gray-200 no-print">
-          <button 
+          <button
             type="button"
             onClick={() => handleUpdate(-step)}
             className="px-3 bg-white text-gray-600 hover:bg-gray-100 active:bg-gray-200 transition-colors flex items-center justify-center border-r border-gray-200 cursor-pointer"
           >
             <Minus size={16} />
           </button>
-          <button 
+          <button
             type="button"
             onClick={() => handleUpdate(step)}
             className="px-3 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-colors flex items-center justify-center cursor-pointer"
@@ -104,8 +107,57 @@ const StepperInput: React.FC<{
   );
 };
 
+const BasementStepperInput: React.FC<{
+  label?: string, value: string, onChange: (val: string) => void,
+  className?: string
+}> = ({ label, value, onChange, className = "" }) => {
+  const handleUpdate = (delta: number) => {
+    vibrate(5);
+    const current = parseFloat(value) || 0;
+    const nextValue = Math.max(0, current + delta);
+    onChange(nextValue.toString());
+  };
+
+  const displayValue = value && parseFloat(value) > 0 ? `B${value}` : '';
+
+  return (
+    <div className={`flex flex-col ${className}`}>
+      {label && <label className="text-sm font-bold text-gray-700 mb-1 print:text-black">{label}</label>}
+      <div className="flex items-stretch border border-gray-300 rounded-lg overflow-hidden shadow-sm bg-white print:border-none">
+        <input
+          type="text"
+          value={displayValue}
+          readOnly
+          placeholder="0"
+          className="flex-1 px-3 py-2 text-base text-black font-bold focus:outline-none min-w-0 bg-white print:p-0 print:text-sm cursor-default"
+        />
+        <span className="flex items-center px-2 text-xs font-bold text-gray-500 bg-white border-l border-r border-gray-200 print:hidden">
+          層
+        </span>
+        <div className="flex border-l border-gray-200 no-print">
+          <button
+            type="button"
+            onClick={() => handleUpdate(-1)}
+            className="px-3 bg-white text-gray-600 hover:bg-gray-100 active:bg-gray-200 transition-colors flex items-center justify-center border-r border-gray-200 cursor-pointer"
+          >
+            <Minus size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleUpdate(1)}
+            className="px-3 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 transition-colors flex items-center justify-center cursor-pointer"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 const SelectField: React.FC<{
-  label?: string, value: string, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, 
+  label?: string, value: string, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void,
   options: any[], className?: string, width?: string, hideLabel?: boolean
 }> = ({ label, value, onChange, options, className = "", width = "w-full", hideLabel = false }) => (
   <div className={`flex flex-col ${width} ${className}`}>
@@ -130,7 +182,7 @@ const SelectField: React.FC<{
 );
 
 const TextAreaField: React.FC<{
-  label?: string, value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, 
+  label?: string, value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void,
   placeholder?: string, rows?: number, hideLabel?: boolean
 }> = ({ label, value, onChange, placeholder, rows = 3, hideLabel = false }) => (
   <div className="flex flex-col w-full">
@@ -146,7 +198,7 @@ const TextAreaField: React.FC<{
 );
 
 const RadioGroup: React.FC<{
-  label: string, name: string, options: string[], value: string, onChange: (val: string) => void, 
+  label: string, name: string, options: string[], value: string, onChange: (val: string) => void,
   className?: string
 }> = ({ label, name, options, value, onChange, className = "" }) => (
   <div className={`flex flex-col mb-3 ${className}`}>
@@ -186,9 +238,9 @@ const RiskSelector: React.FC<{
       <div className="flex flex-wrap gap-2">
         {RISK_OPTIONS.map(risk => (
           <label key={risk} className={`flex items-center gap-2 cursor-pointer px-4 py-2 rounded-xl border transition-all active:scale-95 ${values.includes(risk) ? 'bg-purple-50 border-purple-500 ring-2 ring-purple-100 shadow-inner' : 'bg-white border-gray-200 shadow-sm'}`}>
-            <input 
-              type="checkbox" 
-              checked={values.includes(risk)} 
+            <input
+              type="checkbox"
+              checked={values.includes(risk)}
               onChange={() => handleCheck(risk)}
               className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500 bg-white"
             />
@@ -196,9 +248,9 @@ const RiskSelector: React.FC<{
           </label>
         ))}
       </div>
-      <input 
+      <input
         type="text"
-        value={otherValue || ''} 
+        value={otherValue || ''}
         onChange={(e) => onChange(values, e.target.value)}
         className="border-b border-gray-300 text-black font-bold py-1 text-sm w-full focus:outline-none focus:border-purple-500 bg-white print:border-none print:p-0"
         placeholder="其他風險 (自由撰寫)..."
@@ -208,7 +260,7 @@ const RiskSelector: React.FC<{
 };
 
 const TimeRecorder: React.FC<{
-  label?: string, value: string, onChange: (val: string) => void, 
+  label?: string, value: string, onChange: (val: string) => void,
   className?: string, buttonOnly?: boolean, minimal?: boolean
 }> = ({ label, value, onChange, className = "", buttonOnly = false, minimal = false }) => {
   const recordCurrentTime = () => {
@@ -279,7 +331,7 @@ const AIReportView: React.FC<{
 }> = ({ content, placeholder, onEdit, minHeight = "150px" }) => {
   if (!content) {
     return (
-      <div 
+      <div
         onClick={onEdit}
         className={`w-full border-2 border-dashed border-gray-300 rounded-xl p-6 text-gray-400 cursor-pointer hover:border-blue-400 active:bg-gray-50 flex items-center justify-center transition-colors bg-white`}
         style={{ minHeight }}
@@ -297,7 +349,7 @@ const AIReportView: React.FC<{
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden print:shadow-none print:border-none">
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 border-b border-gray-100 flex justify-between items-center print:hidden">
-        <span className="text-sm font-bold text-blue-800 flex items-center gap-2"><Sparkles size={16}/> 智能分析報告</span>
+        <span className="text-sm font-bold text-blue-800 flex items-center gap-2"><Sparkles size={16} /> 智能分析報告</span>
         <button type="button" onClick={onEdit} className="text-xs flex items-center gap-1 text-blue-600 font-bold px-3 py-1.5 rounded-full bg-white shadow-sm active:bg-blue-50 transition-colors cursor-pointer">
           <Edit3 size={12} /> 編輯
         </button>
@@ -314,7 +366,7 @@ const AIReportView: React.FC<{
               </h4>
             );
           }
-          
+
           if (trimmed.startsWith('-') || trimmed.startsWith('*') || trimmed.startsWith('•')) {
             return (
               <div key={idx} className="flex gap-2 ml-1">
@@ -344,7 +396,7 @@ const AIReportView: React.FC<{
 // --- Main App Logic ---
 
 const getInitialState = (): FormDataState => ({
-  isoName: '', arrivalTime: '', 
+  isoName: '', arrivalTime: '',
   incidentName: '', icName: '',
   floorsAbove: '', floorsBelow: '', usage: '',
   structure: '', structureOther: '', floorArea: '',
@@ -354,7 +406,7 @@ const getInitialState = (): FormDataState => ({
   deploymentGroups: '',
   briefingTime: '',
   ritTime: '', ritLeader: '',
-  weatherCondition: '晴天', temperature: '25', windDirection: '',
+  weatherCondition: '晴天', weatherOther: '', temperature: '25', windDirection: '',
   groundStatus: '平坦', groundStatusOther: '',
   recon: {
     s1: { floor: '', fire: '0', smokeV1: '', smokeV2: '', smokeC: '無', smokeD: '', door: '未知', window: '未知', groups: '', riskSelected: [], riskOther: '', time: '', image: null },
@@ -423,16 +475,16 @@ const App: React.FC = () => {
   const addMedicRow = () => {
     vibrate(20);
     const newRow: MedicRecord = {
-      id: Date.now(), 
-      time: '', 
-      monitor: '', 
-      image: null, 
-      analysis_action: '', 
+      id: Date.now(),
+      time: '',
+      monitor: '',
+      image: null,
+      analysis_action: '',
       communicate: '未指定'
     };
-    setFormData(prev => ({ 
-      ...prev, 
-      medicRecords: [newRow, ...prev.medicRecords] 
+    setFormData(prev => ({
+      ...prev,
+      medicRecords: [newRow, ...prev.medicRecords]
     }));
   };
 
@@ -440,7 +492,7 @@ const App: React.FC = () => {
     e.stopPropagation();
     e.preventDefault();
     vibrate(40);
-    if(window.confirm("確定要刪除這筆 MEDIC 評估紀錄嗎？")) {
+    if (window.confirm("確定要刪除這筆 MEDIC 評估紀錄嗎？")) {
       setFormData(prev => {
         const newList = prev.medicRecords.filter(item => item.id !== id);
         return { ...prev, medicRecords: [...newList] };
@@ -461,9 +513,9 @@ const App: React.FC = () => {
     const newLog: MaydayLog = { id: Date.now(), time: '', event: '' };
     setFormData(prev => ({
       ...prev,
-      mayday: { 
-        ...prev.mayday, 
-        eventLog: [newLog, ...prev.mayday.eventLog] 
+      mayday: {
+        ...prev.mayday,
+        eventLog: [newLog, ...prev.mayday.eventLog]
       }
     }));
   };
@@ -472,17 +524,17 @@ const App: React.FC = () => {
     e.stopPropagation();
     e.preventDefault();
     vibrate(40);
-    if(window.confirm("確定要刪除這筆事件紀錄嗎？")) {
-        setFormData(prev => {
-            const newList = prev.mayday.eventLog.filter(item => item.id !== id);
-            return {
-                ...prev,
-                mayday: {
-                    ...prev.mayday,
-                    eventLog: [...newList]
-                }
-            };
-        });
+    if (window.confirm("確定要刪除這筆事件紀錄嗎？")) {
+      setFormData(prev => {
+        const newList = prev.mayday.eventLog.filter(item => item.id !== id);
+        return {
+          ...prev,
+          mayday: {
+            ...prev.mayday,
+            eventLog: [...newList]
+          }
+        };
+      });
     }
   };
 
@@ -537,9 +589,77 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePrintToPDF = () => {
+  const handleDownloadPDF = async () => {
     vibrate(30);
-    window.print();
+    const element = document.getElementById('form-container');
+    if (!element) return;
+
+    // Clone to avoid checking current visibility state flickering
+    const clone = element.cloneNode(true) as HTMLElement;
+
+    // Sync input values (cloneNode doesn't copy current values of inputs)
+    const originalInputs = element.querySelectorAll('input, textarea, select');
+    const cloneInputs = clone.querySelectorAll('input, textarea, select');
+    originalInputs.forEach((input, i) => {
+      const cloneInput = cloneInputs[i] as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+      if ((input as HTMLInputElement).type === 'checkbox' || (input as HTMLInputElement).type === 'radio') {
+        (cloneInput as HTMLInputElement).checked = (input as HTMLInputElement).checked;
+      } else {
+        cloneInput.value = (input as HTMLInputElement).value;
+      }
+    });
+
+    // Make all sections visible in the clone
+    // Select all direct children that are hidden (tabs)
+    const sections = clone.querySelectorAll('.hidden');
+    sections.forEach((sec) => {
+      // Logic for print:block elements (header/sections)
+      if (sec.classList.contains('print:block')) {
+        sec.classList.remove('hidden');
+        sec.classList.add('block');
+      }
+    });
+
+    // Also specific activeTab logic hidden divs replacement
+    // The tab containers have dynamic classes like `${activeTab === 'basic' ? 'block' : 'hidden print:block'}`.
+    // In DOM validation they will just have 'hidden print:block' class string if inactive.
+    // Our previous selector '.hidden' catches them.
+    // We just ensure they are visible.
+
+    // Remove buttons that occupy space or look bad in PDF (like add buttons, action buttons)
+    // We can use the no-print class as a hook to remove them?
+    // html2pdf might respect @media print css if we set it up, but we are using html2canvas which renders DOM.
+    // html2canvas DOES NOT SUPPORT print media queries fully.
+    // So we must manually hide 'no-print' elements in the clone.
+    const noPrint = clone.querySelectorAll('.no-print');
+    noPrint.forEach(el => el.remove());
+
+    // Create a container for the clone off-screen
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.top = '-9999px';
+    container.style.left = '-9999px';
+    container.style.width = '210mm'; // Force A4 width context
+    container.className = 'bg-white p-8'; // Add some padding
+    container.appendChild(clone);
+    document.body.appendChild(container);
+
+    const opt = {
+      margin: 5,
+      filename: `ISO_Report_${getNowDateTime().replace(/[:\s]/g, '')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+      await html2pdf().set(opt).from(clone).save();
+    } catch (e: any) {
+      console.error(e);
+      alert('PDF 生成失敗: ' + e.message);
+    } finally {
+      document.body.removeChild(container);
+    }
   };
 
   // --- View Renders ---
@@ -557,16 +677,19 @@ const App: React.FC = () => {
         <InputField label="災害名稱" value={formData.incidentName} onChange={(e) => updateField('incidentName', e.target.value)} />
         <InputField label="初期指揮官 (IC)" value={formData.icName} onChange={(e) => updateField('icName', e.target.value)} />
       </div>
-      
+
       <SectionTitle icon={Building} title="3. 建築資訊" />
       <div className="bg-white p-4 rounded-xl border border-gray-200 mt-2 shadow-sm space-y-4">
-          <div className="flex gap-2">
-            <StepperInput label="地上層" value={formData.floorsAbove} onChange={(val) => updateField('floorsAbove', val)} suffix="層" className="flex-1" />
-            <StepperInput label="地下層" value={formData.floorsBelow} onChange={(val) => updateField('floorsBelow', val)} suffix="層" className="flex-1" />
-          </div>
-          <InputField label="建築用途" value={formData.usage} onChange={(e) => updateField('usage', e.target.value)} />
-          <RadioGroup label="建築構造" name="structure" options={['RC', '鐵皮', '磚造', '木造']} value={formData.structure} onChange={(val) => updateField('structure', val)} />
-          <StepperInput label="單層面積" value={formData.floorArea} onChange={(val) => updateField('floorArea', val)} suffix="m²" step={100} />
+        <div className="flex gap-2">
+          <StepperInput label="地上層" value={formData.floorsAbove} onChange={(val) => updateField('floorsAbove', val)} suffix="層" className="flex-1" />
+          <BasementStepperInput label="地下層" value={formData.floorsBelow} onChange={(val) => updateField('floorsBelow', val)} className="flex-1" />
+        </div>
+        <InputField label="建築用途" value={formData.usage} onChange={(e) => updateField('usage', e.target.value)} />
+        <RadioGroup label="建築構造" name="structure" options={STRUCTURE_OPTIONS} value={formData.structure} onChange={(val) => updateField('structure', val)} />
+        {formData.structure === '其他' && (
+          <InputField label="其他建築構造" value={formData.structureOther} onChange={(e) => updateField('structureOther', e.target.value)} placeholder="請說明建築構造..." />
+        )}
+        <StepperInput label="單層面積" value={formData.floorArea} onChange={(val) => updateField('floorArea', val)} suffix="m²" step={100} />
       </div>
 
       <SectionTitle icon={User} title="4. 助理安全官 (ASO)" />
@@ -591,39 +714,33 @@ const App: React.FC = () => {
 
       <SectionTitle icon={Clock} title="6. RIT" />
       <div className="grid grid-cols-1 gap-4">
-         <TimeRecorder label="初次簡報時間" value={formData.briefingTime} onChange={(val) => updateField('briefingTime', val)} />
-         <TimeRecorder label="RIT 成立時間" value={formData.ritTime} onChange={(val) => updateField('ritTime', val)} />
-         <InputField label="RIT 帶隊官" value={formData.ritLeader} onChange={(e) => updateField('ritLeader', e.target.value)} />
+        <TimeRecorder label="初次簡報時間" value={formData.briefingTime} onChange={(val) => updateField('briefingTime', val)} />
+        <TimeRecorder label="RIT 成立時間" value={formData.ritTime} onChange={(val) => updateField('ritTime', val)} />
+        <InputField label="RIT 帶隊官" value={formData.ritLeader} onChange={(e) => updateField('ritLeader', e.target.value)} />
       </div>
 
       <SectionTitle icon={Wind} title="7. 環境與天氣" />
       <div className="grid grid-cols-1 gap-4">
-        <div className="flex gap-2">
-          <RadioGroup 
-              label="天氣" 
-              name="weather" 
-              options={['晴天', '陰天', '雨天', '強風']} 
-              value={formData.weatherCondition} 
-              onChange={(val) => updateField('weatherCondition', val)}
-              className="flex-1"
-          />
-          <StepperInput label="氣溫" value={formData.temperature} onChange={(val) => updateField('temperature', val)} suffix="°C" className="w-24" min={-50} />
+        <RadioGroup label="天氣" name="weather" options={WEATHER_CONDITIONS} value={formData.weatherCondition} onChange={(val) => updateField('weatherCondition', val)} />
+        {formData.weatherCondition === '其他' && (
+          <InputField label="其他天氣" value={formData.weatherOther || ''} onChange={(e) => updateField('weatherOther', e.target.value)} placeholder="請說明天氣狀況..." />
+        )}
+        <div className="flex flex-wrap gap-2">
+          <StepperInput label="氣溫" value={formData.temperature} onChange={(val) => updateField('temperature', val)} suffix="°C" className="flex-1 min-w-[200px]" min={-50} />
+          <InputField label="風向" value={formData.windDirection} onChange={(e) => updateField('windDirection', e.target.value)} className="flex-1 min-w-[200px]" />
         </div>
-        <InputField label="風向" value={formData.windDirection} onChange={(e) => updateField('windDirection', e.target.value)} />
-        <RadioGroup 
-            label="地面狀況" 
-            name="ground" 
-            options={['平坦', '不平坦', '濕滑', '泥濘', '障礙物']} 
-            value={formData.groundStatus} 
-            onChange={(val) => updateField('groundStatus', val)} 
+        <RadioGroup
+          label="地面狀況"
+          name="ground"
+          options={GROUND_CONDITIONS}
+          value={formData.groundStatus}
+          onChange={(val) => updateField('groundStatus', val)}
         />
-        <TextAreaField 
-            label="環境與地面備註 (其他)" 
-            placeholder="描述特殊天氣、地面結冰、大量障礙物等特殊狀況..." 
-            value={formData.groundStatusOther} 
-            onChange={(e) => updateField('groundStatusOther', e.target.value)}
-        />
+        {formData.groundStatus === '其他' && (
+          <InputField label="其他地面狀況" value={formData.groundStatusOther} onChange={(e) => updateField('groundStatusOther', e.target.value)} placeholder="請說明地面狀況..." />
+        )}
       </div>
+      <div className="border-b-2 border-orange-600 mt-6 mb-8 mx-auto w-full print:border-black" />
     </div>
   );
 
@@ -643,32 +760,32 @@ const App: React.FC = () => {
           <div className="bg-white p-2 rounded-lg border border-gray-200">
             <span className="text-xs font-bold text-gray-500 mb-1 block">煙霧 (量/速/色/濃)</span>
             <div className="grid grid-cols-4 gap-1">
-              <StepperInput placeholder="量" value={data.smokeV1} onChange={(val) => updateRecon(sideKey, 'smokeV1', val)} />
-              <StepperInput placeholder="速" value={data.smokeV2} onChange={(val) => updateRecon(sideKey, 'smokeV2', val)} />
+              <InputField placeholder="量" value={data.smokeV1} onChange={(e) => updateRecon(sideKey, 'smokeV1', e.target.value)} />
+              <InputField placeholder="速" value={data.smokeV2} onChange={(e) => updateRecon(sideKey, 'smokeV2', e.target.value)} />
               <SelectField value={data.smokeC} onChange={(e) => updateRecon(sideKey, 'smokeC', e.target.value)} options={SMOKE_COLOR_OPTIONS} hideLabel />
-              <StepperInput placeholder="濃" value={data.smokeD} onChange={(val) => updateRecon(sideKey, 'smokeD', val)} />
+              <InputField placeholder="濃" value={data.smokeD} onChange={(e) => updateRecon(sideKey, 'smokeD', e.target.value)} />
             </div>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-2">
             <SelectField label="門" value={data.door} onChange={(e) => updateRecon(sideKey, 'door', e.target.value)} options={ENTRY_OPTIONS} />
             <SelectField label="窗" value={data.window} onChange={(e) => updateRecon(sideKey, 'window', e.target.value)} options={ENTRY_OPTIONS} />
           </div>
-          
+
           <StepperInput label="消防作業組數" value={data.groups} onChange={(val) => updateRecon(sideKey, 'groups', val)} suffix="組" />
 
-          <RiskSelector 
-            values={data.riskSelected} 
-            otherValue={data.riskOther} 
+          <RiskSelector
+            values={data.riskSelected}
+            otherValue={data.riskOther}
             onChange={(sel, other) => {
               updateRecon(sideKey, 'riskSelected', sel);
               updateRecon(sideKey, 'riskOther', other);
-            }} 
+            }}
           />
           <div className="flex justify-between items-center">
             <TimeRecorder label="時間" value={data.time} onChange={(val) => updateRecon(sideKey, 'time', val)} buttonOnly className="w-2/3" />
             <div className="print:hidden flex gap-2">
-              <button 
+              <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 className="p-2 bg-white text-gray-700 rounded-full border border-gray-300 hover:bg-gray-100 transition-colors shadow-sm cursor-pointer"
@@ -684,7 +801,7 @@ const App: React.FC = () => {
             </div>
             <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(sideKey, e.target.files?.[0] || null)} />
           </div>
-          {data.image && <img src={data.image} className="w-full h-40 object-cover rounded-lg border border-gray-200 mt-1" alt="Recon side photo" />}
+          {data.image && <img src={data.image} className="w-full h-auto object-contain max-h-96 rounded-lg border border-gray-200 mt-1" alt="Recon side photo" />}
         </div>
       </div>
     );
@@ -702,10 +819,10 @@ const App: React.FC = () => {
       <div className="mt-8 border-t-2 border-gray-200 pt-4 break-inside-avoid">
         <div className="flex justify-between items-center mb-4 print:hidden">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Activity className="text-green-600" /> AI 分析建議</h3>
-          <button 
+          <button
             type="button"
-            onClick={callISOAI} 
-            disabled={isLoading} 
+            onClick={callISOAI}
+            disabled={isLoading}
             className={`flex items-center gap-1 px-4 py-2 rounded-xl text-white font-bold transition-all shadow-md active:scale-95 cursor-pointer ${isLoading ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
           >
             <Sparkles size={20} /> {isLoading ? '正在生成...' : '生成報告'}
@@ -722,25 +839,20 @@ const App: React.FC = () => {
 
   const renderMedic = () => (
     <div className="pb-20 space-y-6 animate-fadeIn bg-white">
-      <div className="flex justify-between items-center">
-        <SectionTitle icon={ClipboardList} title="評估紀錄 (MEDIC)" className="mt-0 mb-0 border-none" />
-        <button type="button" onClick={addMedicRow} className="px-4 py-2 bg-blue-600 text-white rounded-full flex items-center gap-2 font-bold shadow-lg no-print active:scale-95 transition-transform cursor-pointer">
-          <Plus size={20} /> 新增
-        </button>
-      </div>
+      <SectionTitle icon={ClipboardList} title="評估紀錄 (MEDIC)" />
       <div className="space-y-6">
         {formData.medicRecords.map(row => (
           <div key={row.id} className="bg-white rounded-xl shadow-md border-l-4 border-blue-500 p-5 break-inside-avoid print:border print:shadow-none relative">
             {/* Delete button wrapper to ensure reliable click */}
             <div className="absolute top-4 right-4 z-50 no-print">
-                <button 
-                  type="button"
-                  onClick={(e) => deleteMedicRow(e, row.id)} 
-                  className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 bg-white border border-red-100 shadow-sm transition-all flex items-center justify-center cursor-pointer active:scale-90"
-                  title="刪除此筆 MEDIC 紀錄"
-                >
-                  <Trash2 size={24} />
-                </button>
+              <button
+                type="button"
+                onClick={(e) => deleteMedicRow(e, row.id)}
+                className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 bg-white border border-red-100 shadow-sm transition-all flex items-center justify-center cursor-pointer active:scale-90"
+                title="刪除此筆 MEDIC 紀錄"
+              >
+                <Trash2 size={24} />
+              </button>
             </div>
             <div className="flex items-center mb-4 border-b border-gray-100 pb-2 mr-12">
               <TimeRecorder value={row.time} onChange={(val) => updateMedicRow(row.id, 'time', val)} minimal />
@@ -749,11 +861,11 @@ const App: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2"><Eye size={18} className="text-blue-500" /> 監控環境與行動</div>
                 <TextAreaField value={row.monitor} onChange={(e) => updateMedicRow(row.id, 'monitor', e.target.value)} placeholder="監控描述..." hideLabel />
-                {row.image && <img src={row.image} className="w-full h-48 object-cover rounded-lg mt-2 border" alt="Medic assessment" />}
+                {row.image && <img src={row.image} className="w-full h-auto object-contain max-h-96 rounded-lg mt-2 border" alt="Medic assessment" />}
                 <div className="mt-2 no-print">
                   <input type="file" className="hidden" id={`medic-img-${row.id}`} accept="image/*" onChange={async (e) => {
                     const f = e.target.files?.[0];
-                    if(f) updateMedicRow(row.id, 'image', await resizeImage(f));
+                    if (f) updateMedicRow(row.id, 'image', await resizeImage(f));
                   }} />
                   <label htmlFor={`medic-img-${row.id}`} className="cursor-pointer bg-white hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 border inline-flex transition-colors shadow-sm font-bold text-gray-700">
                     <Camera size={16} /> 上傳/拍攝照片
@@ -763,9 +875,9 @@ const App: React.FC = () => {
               <div className="border-t border-gray-100 pt-4">
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex items-center gap-2 text-sm font-bold text-gray-700"><ShieldAlert size={18} className="text-orange-500" /> 評估與對策</div>
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => callMedicAI(row.id)} 
+                    onClick={() => callMedicAI(row.id)}
                     disabled={medicLoading[row.id]}
                     className="no-print text-xs font-bold px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-200 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
                   >
@@ -786,7 +898,7 @@ const App: React.FC = () => {
           </div>
         ))}
 
-        <button 
+        <button
           type="button"
           onClick={addMedicRow}
           className="w-full text-center py-12 bg-white rounded-xl border-2 border-dashed border-gray-300 text-gray-500 font-bold hover:border-blue-400 hover:text-blue-500 transition-all flex flex-col items-center gap-3 no-print cursor-pointer active:bg-blue-50"
@@ -805,54 +917,51 @@ const App: React.FC = () => {
           <h2 className="text-xl font-bold flex items-center gap-2"><Siren className="animate-pulse" /> MAYDAY</h2>
           <p className="text-red-100 text-sm opacity-90 print:text-red-600">緊急救援狀態</p>
         </div>
-        <TimeRecorder value={formData.mayday.confirmTime} onChange={(val) => updateField('mayday', {...formData.mayday, confirmTime: val})} minimal className="print:border-red-600 print:text-red-700" />
+        <TimeRecorder value={formData.mayday.confirmTime} onChange={(val) => updateField('mayday', { ...formData.mayday, confirmTime: val })} minimal className="print:border-red-600 print:text-red-700" />
       </div>
       <div className="grid grid-cols-1 gap-6">
         <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-red-500 space-y-4 break-inside-avoid print:border">
           <h3 className="font-bold flex items-center gap-2 border-b pb-2 text-red-700"><Radio size={20} className="text-red-600" /> LUNAR</h3>
-          <InputField label="L (Location)" value={formData.mayday.lunarLocation} onChange={(e) => updateField('mayday', {...formData.mayday, lunarLocation: e.target.value})} />
+          <InputField label="L (位置, Location)" value={formData.mayday.lunarLocation} onChange={(e) => updateField('mayday', { ...formData.mayday, lunarLocation: e.target.value })} />
           <div className="flex gap-2">
-            <InputField label="U (Unit)" value={formData.mayday.lunarUnit} onChange={(e) => updateField('mayday', {...formData.mayday, lunarUnit: e.target.value})} />
-            <InputField label="N (Name)" value={formData.mayday.lunarName} onChange={(e) => updateField('mayday', {...formData.mayday, lunarName: e.target.value})} />
+            <InputField label="U (單位, Unit)" value={formData.mayday.lunarUnit} onChange={(e) => updateField('mayday', { ...formData.mayday, lunarUnit: e.target.value })} />
+            <InputField label="N (姓名, Name)" value={formData.mayday.lunarName} onChange={(e) => updateField('mayday', { ...formData.mayday, lunarName: e.target.value })} />
           </div>
-          <InputField label="A (Air/Task)" value={formData.mayday.lunarAirTask} onChange={(e) => updateField('mayday', {...formData.mayday, lunarAirTask: e.target.value})} />
-          <InputField label="R (Resource)" value={formData.mayday.lunarResources} onChange={(e) => updateField('mayday', {...formData.mayday, lunarResources: e.target.value})} />
+          <InputField label="A (空氣/任務, Air/Task)" value={formData.mayday.lunarAirTask} onChange={(e) => updateField('mayday', { ...formData.mayday, lunarAirTask: e.target.value })} />
+          <InputField label="R (資源, Resource)" value={formData.mayday.lunarResources} onChange={(e) => updateField('mayday', { ...formData.mayday, lunarResources: e.target.value })} />
         </div>
         <div className="bg-white rounded-xl p-4 border border-gray-200 break-inside-avoid shadow-sm print:shadow-none">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2"><ClipboardList size={20} /> 事件紀錄</h3>
-            <button type="button" onClick={addMaydayLog} className="no-print bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold active:scale-95 transition-transform cursor-pointer"><Plus size={18} /> 新增</button>
-          </div>
+          <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4"><ClipboardList size={20} /> 事件紀錄</h3>
           <div className="space-y-3">
             {formData.mayday.eventLog.map(log => (
               <div key={log.id} className="bg-white p-3 rounded-lg shadow-sm flex items-start gap-3 border border-gray-200 print:border-none print:shadow-none relative">
                 <TimeRecorder value={log.time} onChange={(val) => updateMaydayLog(log.id, 'time', val)} minimal />
-                <textarea 
-                  className="flex-1 min-h-[50px] outline-none text-base border-b focus:border-red-400 py-1 bg-white text-black font-bold mr-12" 
-                  value={log.event} 
+                <textarea
+                  className="flex-1 min-h-[50px] outline-none text-base border-b focus:border-red-400 py-1 bg-white text-black font-bold mr-12"
+                  value={log.event}
                   onChange={(e) => updateMaydayLog(log.id, 'event', e.target.value)}
                   placeholder="詳情內容..."
                 />
                 <div className="absolute top-3 right-3 z-50 no-print">
-                    <button 
-                        type="button"
-                        onClick={(e) => deleteMaydayLog(e, log.id)} 
-                        className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-all flex items-center justify-center cursor-pointer active:scale-90"
-                        title="刪除此筆事件紀錄"
-                    >
-                      <Trash2 size={24} />
-                    </button>
+                  <button
+                    type="button"
+                    onClick={(e) => deleteMaydayLog(e, log.id)}
+                    className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-all flex items-center justify-center cursor-pointer active:scale-90"
+                    title="刪除此筆事件紀錄"
+                  >
+                    <Trash2 size={24} />
+                  </button>
                 </div>
               </div>
             ))}
-            
-            <button 
-                type="button"
-                onClick={addMaydayLog}
-                className="w-full text-center py-10 bg-white rounded-xl border-2 border-dashed border-gray-300 text-gray-500 font-bold hover:border-red-400 hover:text-red-500 transition-all flex flex-col items-center gap-2 no-print cursor-pointer active:bg-red-50"
-              >
-                <div className="p-2 bg-red-50 rounded-full text-red-600"><Plus size={24} /></div>
-                點擊此處「新增」一筆事件紀錄
+
+            <button
+              type="button"
+              onClick={addMaydayLog}
+              className="w-full text-center py-10 bg-white rounded-xl border-2 border-dashed border-gray-300 text-gray-500 font-bold hover:border-red-400 hover:text-red-500 transition-all flex flex-col items-center gap-2 no-print cursor-pointer active:bg-red-50"
+            >
+              <div className="p-2 bg-red-50 rounded-full text-red-600"><Plus size={24} /></div>
+              點擊此處「新增」一筆事件紀錄
             </button>
           </div>
         </div>
@@ -871,7 +980,7 @@ const App: React.FC = () => {
             <button type="button" onClick={resetAll} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer active:scale-95" title="清空所有資訊">
               <Eraser size={22} />
             </button>
-            <button type="button" onClick={handlePrintToPDF} className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-lg transition-all font-bold cursor-pointer active:scale-95" title="下載 PDF / 列印">
+            <button type="button" onClick={handleDownloadPDF} className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-lg transition-all font-bold cursor-pointer active:scale-95" title="下載 PDF">
               <span className="hidden sm:inline">下載 PDF</span>
               <FileDown size={22} />
             </button>
@@ -880,7 +989,7 @@ const App: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar bg-white print:overflow-visible print:h-auto print:bg-white">
-        <div className="max-w-5xl mx-auto bg-white min-h-full p-4 md:p-6 print:p-0">
+        <div id="form-container" className="max-w-5xl mx-auto bg-white min-h-full p-4 md:p-6 print:p-0">
           <div className="hidden print:block text-center mb-6 pb-4 border-b-2 border-double border-gray-300">
             <h1 className="text-2xl font-black text-gray-900 mb-2">桃園市政府消防局事故安全官評估簡報表</h1>
             <p className="text-sm text-gray-500 font-mono tracking-tight">桃園消防專業事故安全官系統 - ISO REPORT</p>
@@ -897,23 +1006,25 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div className="shrink-0 bg-white border-t border-gray-200 px-4 py-2 flex justify-between items-center z-50 no-print pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-        {[
-          { id: 'basic', label: '基本', icon: FileText },
-          { id: 'recon', label: '偵查', icon: Layers },
-          { id: 'medic', label: 'MEDIC', icon: ClipboardList },
-          { id: 'mayday', label: 'MAYDAY', icon: Siren },
-        ].map(tab => (
-          <button 
-            key={tab.id}
-            type="button"
-            onClick={() => { vibrate(); setActiveTab(tab.id as any); }}
-            className={`flex flex-col items-center justify-center py-1 px-4 rounded-xl transition-all active:scale-95 cursor-pointer ${activeTab === tab.id ? (tab.id === 'mayday' ? 'text-red-600 bg-red-50' : 'text-orange-600 bg-orange-50') : 'text-gray-400'}`}
-          >
-            <tab.icon size={24} strokeWidth={activeTab === tab.id ? 2.5 : 2} className={activeTab === tab.id && tab.id === 'mayday' ? 'animate-pulse' : ''} />
-            <span className="text-[10px] mt-1 font-bold">{tab.label}</span>
-          </button>
-        ))}
+      <div className="shrink-0 bg-white border-t border-gray-200 px-4 py-2 flex justify-center items-center z-50 no-print pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+        <div className="max-w-5xl w-full flex justify-between">
+          {[
+            { id: 'basic', label: '基本', icon: FileText },
+            { id: 'recon', label: '環場', icon: Layers },
+            { id: 'medic', label: 'MEDIC', icon: ClipboardList },
+            { id: 'mayday', label: 'MAYDAY', icon: Siren },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => { vibrate(); setActiveTab(tab.id as any); }}
+              className={`flex flex-col items-center justify-center py-1 px-4 rounded-xl transition-all active:scale-95 cursor-pointer ${activeTab === tab.id ? (tab.id === 'mayday' ? 'text-red-600 bg-red-50' : 'text-orange-600 bg-orange-50') : 'text-gray-400'}`}
+            >
+              <tab.icon size={24} strokeWidth={activeTab === tab.id ? 2.5 : 2} className={activeTab === tab.id && tab.id === 'mayday' ? 'animate-pulse' : ''} />
+              <span className="text-[10px] mt-1 font-bold">{tab.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

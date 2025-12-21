@@ -2,8 +2,28 @@
 import { GoogleGenAI } from "@google/genai";
 import { FormDataState, ReconSide, MedicRecord } from './types';
 
-// Fix: Initialized GoogleGenAI strictly following guidelines using only process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy initialization: 延遲初始化，讓應用程式可以在沒有 API key 的情況下載入
+let aiClient: GoogleGenAI | null = null;
+
+const getAIClient = (): GoogleGenAI => {
+  if (aiClient) {
+    return aiClient;
+  }
+
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error(
+      "❌ API Key 未設定\n\n" +
+      "請在專案根目錄建立 .env.local 檔案並加入：\n" +
+      "GEMINI_API_KEY=你的_API_金鑰\n\n" +
+      "如何取得 API Key：\n" +
+      "前往 https://aistudio.google.com/apikey 取得免費的 Gemini API Key"
+    );
+  }
+
+  aiClient = new GoogleGenAI({ apiKey });
+  return aiClient;
+};
 
 const getFireDescription = (code: string) => {
   if (code === '1') return '火光(1)';
@@ -65,6 +85,7 @@ export const generateISOAnalysis = async (formData: FormDataState): Promise<stri
   });
 
   // Fix: Used gemini-3-pro-preview for complex reasoning task as it involves safety-critical logic
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: { parts },
@@ -72,6 +93,7 @@ export const generateISOAnalysis = async (formData: FormDataState): Promise<stri
       systemInstruction: systemPrompt,
     },
   });
+
 
   return response.text || "分析失敗，無法取得內容。";
 };
@@ -104,6 +126,7 @@ export const generateMedicAnalysis = async (row: MedicRecord): Promise<string> =
   }
 
   // Fix: Used gemini-3-pro-preview for complex reasoning task as it involves safety-critical logic
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: { parts },
@@ -111,6 +134,7 @@ export const generateMedicAnalysis = async (row: MedicRecord): Promise<string> =
       systemInstruction: systemPrompt,
     },
   });
+
 
   return response.text || "分析失敗，無法取得內容。";
 };

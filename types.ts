@@ -72,6 +72,7 @@ export interface FormDataState {
   ritTime: string;
   ritLeader: string;
   weatherCondition: string;
+  weatherOther: string;
   temperature: string;
   windDirection: string;
   groundStatus: string;
