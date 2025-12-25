@@ -619,7 +619,7 @@ const App: React.FC = () => {
 
       <SectionTitle icon={Building} title="3. 建築資訊" />
       <div className="bg-white p-4 rounded-xl border border-gray-200 mt-2 shadow-sm space-y-4">
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-4">
           <StepperInput label="地上層" value={formData.floorsAbove} onChange={(val) => updateField('floorsAbove', val)} suffix="層" className="flex-1" />
           <BasementStepperInput label="地下層" value={formData.floorsBelow} onChange={(val) => updateField('floorsBelow', val)} className="flex-1" />
         </div>
