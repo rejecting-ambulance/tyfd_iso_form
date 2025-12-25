@@ -87,3 +87,4 @@ export interface FormDataState {
   mayday: MaydayState;
   analysis: string;
 }
+

@@ -10,11 +10,11 @@ const getAIClient = (): GoogleGenAI => {
     return aiClient;
   }
 
-  const apiKey = process.env.API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === 'undefined') {
     throw new Error(
       "❌ API Key 未設定\n\n" +
-      "請在專案根目錄建立 .env.local 檔案並加入：\n" +
+      "請在專案根目錄建立 .env 檔案並加入：\n" +
       "GEMINI_API_KEY=你的_API_金鑰\n\n" +
       "如何取得 API Key：\n" +
       "前往 https://aistudio.google.com/apikey 取得免費的 Gemini API Key"
@@ -39,28 +39,11 @@ const getSmokeVVdDescription = (code: string) => {
   return `${code}`;
 };
 
+import { DEFAULT_AI_MODEL, ISO_SYSTEM_PROMPT, MEDIC_SYSTEM_PROMPT } from './constants';
+
 export const generateISOAnalysis = async (formData: FormDataState): Promise<string> => {
   const structureDetail = formData.structure === '其他' ? formData.structureOther : formData.structure;
   const weatherFull = `${formData.weatherCondition}, 氣溫${formData.temperature}度`;
-
-  const systemPrompt = `你是一名專業火場事故安全官(ISO)。請根據以下資訊(含建築、天氣、RECON四面偵查數據及照片)，進行初步分析並提出安全建議。
-    
-    【輸出格式要求】：
-    請務必使用 Markdown 語法，包含標題 (###) 與條列式 (1. 或 - )，並使用表情符號增強閱讀性。
-    格式範例：
-    ### 🔴 綜合風險評估
-    1. 結構風險：...
-    2. 火勢發展：...
-    
-    ### ⚠️ 危險區域與潛勢
-    - 北側：...
-    - 頂樓：...
-    
-    ### 🛡️ 行動安全建議
-    1. 指揮官(IC)：...
-    2. 內部人員：...
-
-    請直接輸出內容，不需開場白。`;
 
   const parts: any[] = [{ text: `[基本資訊] 災害:${formData.incidentName}; 結構:${structureDetail}; 環境:${weatherFull}` }];
 
@@ -84,34 +67,19 @@ export const generateISOAnalysis = async (formData: FormDataState): Promise<stri
     }
   });
 
-  // Fix: Used gemini-3-pro-preview for complex reasoning task as it involves safety-critical logic
   const ai = getAIClient();
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: DEFAULT_AI_MODEL,
     contents: { parts },
     config: {
-      systemInstruction: systemPrompt,
+      systemInstruction: ISO_SYSTEM_PROMPT,
     },
   });
-
 
   return response.text || "分析失敗，無法取得內容。";
 };
 
 export const generateMedicAnalysis = async (row: MedicRecord): Promise<string> => {
-  const systemPrompt = `你是一名火場事故安全官 (ISO)。你正在填寫 MEDIC 評估表。
-    【輸出格式要求】：
-    請務必使用 Markdown 語法。
-    
-    ### 👁️ 評估 (Evaluate)
-    - 風慶：...
-    
-    ### 🚧 預防 (Develop)
-    - 措施：...
-    
-    ### 🚒 介入 (Intervention)
-    - 行動：...`;
-
   const parts: any[] = [{ text: `當下監控: ${row.monitor}` }];
   if (row.image) {
     const base64Data = row.image.split(',')[1];
@@ -125,16 +93,14 @@ export const generateMedicAnalysis = async (row: MedicRecord): Promise<string> =
     }
   }
 
-  // Fix: Used gemini-3-pro-preview for complex reasoning task as it involves safety-critical logic
   const ai = getAIClient();
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: DEFAULT_AI_MODEL,
     contents: { parts },
     config: {
-      systemInstruction: systemPrompt,
+      systemInstruction: MEDIC_SYSTEM_PROMPT,
     },
   });
-
 
   return response.text || "分析失敗，無法取得內容。";
 };

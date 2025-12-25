@@ -4,7 +4,7 @@ import {
   Printer, Trash2, Eraser, Info, AlertTriangle, User, Clock, Building,
   Flame, Wind, Activity, FileText, Layers, Eye, Camera, XCircle,
   ClipboardList, Plus, Sparkles, Siren, CheckSquare, Radio, MessageCircle,
-  ShieldAlert, ChevronDown, Edit3, Check, FileDown, Minus
+  ShieldAlert, ChevronDown, Edit3, Check, FileDown, Minus, Settings
 } from 'lucide-react';
 import {
   vibrate, resizeImage, getNowDateTime, formatTimeForDisplay
@@ -17,6 +17,7 @@ import {
 
 import { FormDataState, ReconSide, MedicRecord, MaydayLog } from './types';
 import { generateISOAnalysis, generateMedicAnalysis } from './geminiService';
+import { generatePagePDF } from './pdfGenerator';
 
 import html2pdf from 'html2pdf.js';
 
@@ -422,7 +423,7 @@ const getInitialState = (): FormDataState => ({
     radioChannel: '', equipment: [], equipmentBreaking: '', equipmentOther: '',
     eventLog: []
   },
-  analysis: ''
+  analysis: '',
 });
 
 const App: React.FC = () => {
@@ -591,78 +592,16 @@ const App: React.FC = () => {
 
   const handleDownloadPDF = async () => {
     vibrate(30);
-    const element = document.getElementById('form-container');
-    if (!element) return;
-
-    // Clone to avoid checking current visibility state flickering
-    const clone = element.cloneNode(true) as HTMLElement;
-
-    // Sync input values (cloneNode doesn't copy current values of inputs)
-    const originalInputs = element.querySelectorAll('input, textarea, select');
-    const cloneInputs = clone.querySelectorAll('input, textarea, select');
-    originalInputs.forEach((input, i) => {
-      const cloneInput = cloneInputs[i] as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-      if ((input as HTMLInputElement).type === 'checkbox' || (input as HTMLInputElement).type === 'radio') {
-        (cloneInput as HTMLInputElement).checked = (input as HTMLInputElement).checked;
-      } else {
-        cloneInput.value = (input as HTMLInputElement).value;
-      }
-    });
-
-    // Make all sections visible in the clone
-    // Select all direct children that are hidden (tabs)
-    const sections = clone.querySelectorAll('.hidden');
-    sections.forEach((sec) => {
-      // Logic for print:block elements (header/sections)
-      if (sec.classList.contains('print:block')) {
-        sec.classList.remove('hidden');
-        sec.classList.add('block');
-      }
-    });
-
-    // Also specific activeTab logic hidden divs replacement
-    // The tab containers have dynamic classes like `${activeTab === 'basic' ? 'block' : 'hidden print:block'}`.
-    // In DOM validation they will just have 'hidden print:block' class string if inactive.
-    // Our previous selector '.hidden' catches them.
-    // We just ensure they are visible.
-
-    // Remove buttons that occupy space or look bad in PDF (like add buttons, action buttons)
-    // We can use the no-print class as a hook to remove them?
-    // html2pdf might respect @media print css if we set it up, but we are using html2canvas which renders DOM.
-    // html2canvas DOES NOT SUPPORT print media queries fully.
-    // So we must manually hide 'no-print' elements in the clone.
-    const noPrint = clone.querySelectorAll('.no-print');
-    noPrint.forEach(el => el.remove());
-
-    // Create a container for the clone off-screen
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.top = '-9999px';
-    container.style.left = '-9999px';
-    container.style.width = '210mm'; // Force A4 width context
-    container.className = 'bg-white p-8'; // Add some padding
-    container.appendChild(clone);
-    document.body.appendChild(container);
-
-    const opt = {
-      margin: 5,
-      filename: `ISO_Report_${getNowDateTime().replace(/[:\s]/g, '')}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-
     try {
-      await html2pdf().set(opt).from(clone).save();
+      await generatePagePDF(formData, html2pdf);
     } catch (e: any) {
-      console.error(e);
-      alert('PDF 生成失敗: ' + e.message);
-    } finally {
-      document.body.removeChild(container);
+      alert('PDF 下載失敗: ' + e.message);
     }
   };
 
   // --- View Renders ---
+
+
 
   const renderBasic = () => (
     <div className="space-y-6 pb-20 animate-fadeIn bg-white">
@@ -1009,10 +948,10 @@ const App: React.FC = () => {
       <div className="shrink-0 bg-white border-t border-gray-200 px-4 py-2 flex justify-center items-center z-50 no-print pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
         <div className="max-w-5xl w-full flex justify-between">
           {[
-            { id: 'basic', label: '基本', icon: FileText },
-            { id: 'recon', label: '環場', icon: Layers },
-            { id: 'medic', label: 'MEDIC', icon: ClipboardList },
-            { id: 'mayday', label: 'MAYDAY', icon: Siren },
+            { id: 'basic', label: '基本 Info', icon: FileText },
+            { id: 'recon', label: '環場 360° RECON', icon: Layers },
+            { id: 'medic', label: '持續 MEDIC', icon: ClipboardList },
+            { id: 'mayday', label: '緊急 MAYDAY', icon: Siren },
           ].map(tab => (
             <button
               key={tab.id}
