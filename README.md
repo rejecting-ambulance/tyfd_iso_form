@@ -20,7 +20,12 @@
     ```
 
 2.  設定環境變數：
-    *   將 `.env` 或 `.env.local` 中的 `GEMINI_API_KEY` 設定為您的 API Key。
+    *   **本地開發**：在專案根目錄建立 `.env` 檔案（可參考 `.env.example` 如果有），並加入您的變數：
+        ```dotenv
+        GEMINI_API_KEY=你的_API_KEY
+        GOOGLE_APP_SCRIPT_URL=你的_GAS_網址
+        ```
+    *   **GitHub部署**：請前往 GitHub 專案的 **Settings** -> **Secrets and variables** -> **Actions**，新增 `GEMINI_API_KEY` 與 `GOOGLE_APP_SCRIPT_URL` 兩個 Repository secrets（設定時請勿加上任何引號）。
 
 3.  啟動開發伺服器：
     ```bash
