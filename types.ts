@@ -50,6 +50,7 @@ export interface MaydayState {
 }
 
 export interface FormDataState {
+  isoUnit: string;
   isoName: string;
   arrivalTime: string;
   incidentName: string;
@@ -61,6 +62,7 @@ export interface FormDataState {
   structureOther: string;
   floorArea: string;
   asoRequestTime: string;
+  asoUnit: string;
   asoName: string;
   asoArrivalTime: string;
   icConfirmTime: string;

@@ -7,12 +7,12 @@ import {
   ShieldAlert, ChevronDown, Edit3, Check, FileDown, Minus, Settings
 } from 'lucide-react';
 import {
-  vibrate, resizeImage, getNowDateTime, formatTimeForDisplay
+  vibrate, resizeImage, getNowDateTime, formatTimeForDisplay, fetchPersonnel, uploadImageToGAS
 } from './utils';
 import {
   FIRE_OPTIONS, SMOKE_COLOR_OPTIONS, ENTRY_OPTIONS, RISK_OPTIONS,
   WEATHER_CONDITIONS, GROUND_CONDITIONS, COMMUNICATE_TARGETS,
-  RIT_EQUIPMENT_OPTIONS, STRUCTURE_OPTIONS
+  RIT_EQUIPMENT_OPTIONS, STRUCTURE_OPTIONS, GAS_WEB_APP_URL
 } from './constants';
 
 import { FormDataState, ReconSide, MedicRecord, MaydayLog } from './types';
@@ -397,11 +397,11 @@ const AIReportView: React.FC<{
 // --- Main App Logic ---
 
 const getInitialState = (): FormDataState => ({
-  isoName: '', arrivalTime: '',
+  isoUnit: '', isoName: '', arrivalTime: '',
   incidentName: '', icName: '',
   floorsAbove: '', floorsBelow: '', usage: '',
   structure: '', structureOther: '', floorArea: '',
-  asoRequestTime: '', asoName: '', asoArrivalTime: '',
+  asoRequestTime: '', asoUnit: '', asoName: '', asoArrivalTime: '',
   icConfirmTime: '',
   trapped: '無', trappedCount: '', hospitalizedCount: '',
   deploymentGroups: '',
@@ -433,23 +433,64 @@ const App: React.FC = () => {
   const [isEditingAnalysis, setIsEditingAnalysis] = useState(false);
   const [editingMedicRowId, setEditingMedicRowId] = useState<number | null>(null);
 
-  const [formData, setFormData] = useState<FormDataState>(getInitialState());
-
-  // Persistence
-  useEffect(() => {
+  const [formData, setFormData] = useState<FormDataState>(() => {
     const saved = localStorage.getItem('fire_iso_form_v15');
     if (saved) {
       try {
-        setFormData(JSON.parse(saved));
+        return JSON.parse(saved);
       } catch (e) {
-        console.error("Failed to load saved state", e);
+        console.error("Failed to parse saved state", e);
       }
     }
+    return getInitialState();
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginInput, setLoginInput] = useState('');
+  const [loginError, setLoginError] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const [personnelList, setPersonnelList] = useState<{ unit: string, name: string }[]>([]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [loginUnit, setLoginUnit] = useState('');
+  const [loginName, setLoginName] = useState('');
+
+  const fileRefS1 = useRef<HTMLInputElement>(null);
+  const fileRefS2 = useRef<HTMLInputElement>(null);
+  const fileRefS3 = useRef<HTMLInputElement>(null);
+  const fileRefS4 = useRef<HTMLInputElement>(null);
+
+  // Persistence & Data Fetching
+  useEffect(() => {
+    const authStatus = sessionStorage.getItem('iso_auth_status');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+
+    // Always fetch personnel on mount
+    fetchPersonnel(GAS_WEB_APP_URL).then(data => {
+      if (data && data.length > 0) {
+        setPersonnelList(data);
+      }
+    });
   }, []);
 
   useEffect(() => {
     localStorage.setItem('fire_iso_form_v15', JSON.stringify(formData));
   }, [formData]);
+
+  useEffect(() => {
+    localStorage.setItem('fire_iso_form_v15', JSON.stringify(formData));
+  }, [formData]);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  };
 
   const updateField = (field: keyof FormDataState, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -464,13 +505,98 @@ const App: React.FC = () => {
 
   const handleImageUpload = async (side: keyof typeof formData.recon, file: File | null) => {
     if (!file) return;
+    setIsUploadingImage(true);
     try {
       const base64 = await resizeImage(file);
       updateRecon(side, 'image', base64);
-    } catch (e) {
-      alert("圖片處理失敗");
+
+      // 同步上傳至 Google Drive
+      const uploader = formData.isoName || '未選擇人員';
+      const url = await uploadImageToGAS(GAS_WEB_APP_URL, base64, uploader);
+      console.log('Recon Image uploaded to Drive: ', url);
+      showToast('圖片已成功備份至雲端硬碟！');
+      // 可以選擇把 base64 替換為 URL： updateRecon(side, 'image', url);
+      // 但為了離線檢視暫時保留 base64，這裡只要確保有呼叫上傳功能即可。
+    } catch (e: any) {
+      console.error('Image upload error:', e);
+      alert("圖片處理或上傳失敗: \n" + (e.message || JSON.stringify(e)) + "\n\n(若為 Failed to fetch，請確認 GAS 網址且部署權限是否為「所有人」)");
+    } finally {
+      setIsUploadingImage(false);
     }
   };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginInput.trim().toLowerCase() === 'safety') {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('iso_auth_status', 'true');
+
+      // 帶入選擇的單位與人員到表單中
+      setFormData(prev => ({
+        ...prev,
+        isoUnit: loginUnit,
+        isoName: loginName
+      }));
+    } else {
+      setLoginError(true);
+      setTimeout(() => setLoginError(false), 3000);
+    }
+  };
+
+  const unitOptions = Array.from(new Set(personnelList.map((p) => p.unit))).map((u) => ({ value: u, label: u }));
+  const getPersonnelOptions = (unit: string) => {
+    return personnelList.filter((p) => p.unit === unit).map((p) => ({ value: p.name, label: p.name }));
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-gray-50 px-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center">
+          <ShieldAlert className="w-16 h-16 text-orange-600 mx-auto mb-4" />
+          <h1 className="text-2xl font-black text-gray-900 mb-2">桃園消防 ISO 系統</h1>
+          <p className="text-gray-500 mb-6 font-mono text-sm">Authentication Required</p>
+          <form onSubmit={handleLogin}>
+            <div className="flex items-center gap-2 mb-6 text-gray-700 font-bold text-base justify-center flex-wrap">
+              <input
+                type="text"
+                value={loginInput}
+                onChange={e => setLoginInput(e.target.value)}
+                className="border-b-2 border-gray-300 focus:border-orange-500 focus:outline-none w-24 text-center text-orange-600 font-bold px-1"
+                autoFocus
+              />
+              <span>is the only way home.</span>
+            </div>
+
+            <div className="mb-6 space-y-3 bg-gray-50 border border-gray-100 p-4 rounded-xl text-left">
+              <p className="text-xs font-bold text-gray-500 mb-2">請先選擇身分：</p>
+              <SelectField
+                label="ISO 單位"
+                value={loginUnit}
+                onChange={(e) => { setLoginUnit(e.target.value); setLoginName(''); }}
+                options={[{ value: '', label: '請選擇單位' }, ...unitOptions]}
+              />
+              <SelectField
+                label="任務編組 / 人員"
+                value={loginName}
+                onChange={(e) => setLoginName(e.target.value)}
+                options={[{ value: '', label: '請選擇人員' }, ...getPersonnelOptions(loginUnit)]}
+              />
+            </div>
+
+            {loginError && (
+              <p className="text-red-500 font-bold mb-4 animate-bounce">
+                ⚠️ 驗證碼錯誤，請重新輸入
+              </p>
+            )}
+
+            <button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition-all active:scale-95 shadow-md">
+              驗證進入
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   // --- MEDIC Logic ---
   const addMedicRow = () => {
@@ -607,7 +733,10 @@ const App: React.FC = () => {
     <div className="space-y-6 pb-20 animate-fadeIn bg-white">
       <SectionTitle icon={User} title="1. 基本資訊" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <InputField label="事故安全官 (ISO)" value={formData.isoName} onChange={(e) => updateField('isoName', e.target.value)} />
+        <div className="flex gap-2 w-full">
+          <SelectField label="ISO 單位" value={formData.isoUnit || ''} onChange={(e) => { updateField('isoUnit', e.target.value); updateField('isoName', ''); }} options={[{ value: '', label: '單位' }, ...unitOptions]} className="flex-1" />
+          <SelectField label="任務編組 / 人員" value={formData.isoName || ''} onChange={(e) => updateField('isoName', e.target.value)} options={[{ value: '', label: '人員' }, ...getPersonnelOptions(formData.isoUnit)]} className="flex-1" />
+        </div>
         <TimeRecorder label="抵達現場時間" value={formData.arrivalTime} onChange={(val) => updateField('arrivalTime', val)} />
       </div>
 
@@ -634,7 +763,10 @@ const App: React.FC = () => {
       <SectionTitle icon={User} title="4. 助理安全官 (ASO)" />
       <div className="grid grid-cols-1 gap-4">
         <TimeRecorder label="請求 ASO 時間" value={formData.asoRequestTime} onChange={(val) => updateField('asoRequestTime', val)} />
-        <InputField label="ASO 姓名" value={formData.asoName} onChange={(e) => updateField('asoName', e.target.value)} />
+        <div className="flex gap-2 w-full">
+          <SelectField label="ASO 單位" value={formData.asoUnit || ''} onChange={(e) => { updateField('asoUnit', e.target.value); updateField('asoName', ''); }} options={[{ value: '', label: '單位' }, ...unitOptions]} className="flex-1" />
+          <SelectField label="ASO 姓名" value={formData.asoName || ''} onChange={(e) => updateField('asoName', e.target.value)} options={[{ value: '', label: '人員' }, ...getPersonnelOptions(formData.asoUnit)]} className="flex-1" />
+        </div>
         <TimeRecorder label="ASO 抵達時間" value={formData.asoArrivalTime} onChange={(val) => updateField('asoArrivalTime', val)} />
         <TimeRecorder label="與 IC 確認時間" value={formData.icConfirmTime} onChange={(val) => updateField('icConfirmTime', val)} />
       </div>
@@ -683,9 +815,8 @@ const App: React.FC = () => {
     </div>
   );
 
-  const renderReconSide = (sideKey: keyof typeof formData.recon, title: string) => {
+  const renderReconSide = (sideKey: keyof typeof formData.recon, title: string, fileRef: React.RefObject<HTMLInputElement | null>) => {
     const data = formData.recon[sideKey];
-    const fileRef = useRef<HTMLInputElement>(null);
     return (
       <div className="border border-gray-200 p-3 rounded-xl bg-white shadow-sm print:bg-white print:border-black break-inside-avoid mb-4">
         <div className="font-bold bg-orange-50 p-2 rounded-lg mb-3 text-center text-orange-900 border border-orange-100 print:bg-gray-100 print:text-black">
@@ -750,10 +881,10 @@ const App: React.FC = () => {
     <div className="pb-20 space-y-6 animate-fadeIn bg-white">
       <SectionTitle icon={Eye} title="初期 360° RECON" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-        {renderReconSide('s1', '第 1 面')}
-        {renderReconSide('s2', '第 2 面')}
-        {renderReconSide('s3', '第 3 面')}
-        {renderReconSide('s4', '第 4 面')}
+        {renderReconSide('s1', '第 1 面', fileRefS1)}
+        {renderReconSide('s2', '第 2 面', fileRefS2)}
+        {renderReconSide('s3', '第 3 面', fileRefS3)}
+        {renderReconSide('s4', '第 4 面', fileRefS4)}
       </div>
       <div className="mt-8 border-t-2 border-gray-200 pt-4 break-inside-avoid">
         <div className="flex justify-between items-center mb-4 print:hidden">
@@ -804,7 +935,22 @@ const App: React.FC = () => {
                 <div className="mt-2 no-print">
                   <input type="file" className="hidden" id={`medic-img-${row.id}`} accept="image/*" onChange={async (e) => {
                     const f = e.target.files?.[0];
-                    if (f) updateMedicRow(row.id, 'image', await resizeImage(f));
+                    if (f) {
+                      setIsUploadingImage(true);
+                      try {
+                        const base64 = await resizeImage(f);
+                        updateMedicRow(row.id, 'image', base64);
+                        const uploader = formData.isoName || '未選擇人員';
+                        const url = await uploadImageToGAS(GAS_WEB_APP_URL, base64, uploader);
+                        console.log('Medic Image uploaded to Drive: ', url);
+                        showToast('圖片已成功備份至雲端硬碟！');
+                      } catch (err: any) {
+                        console.error('Medic Image upload error:', err);
+                        alert("圖片處理或上傳失敗: \n" + (err.message || JSON.stringify(err)) + "\n\n(若為 Failed to fetch，請確認 GAS 網址且部署權限是否為「所有人」)");
+                      } finally {
+                        setIsUploadingImage(false);
+                      }
+                    }
                   }} />
                   <label htmlFor={`medic-img-${row.id}`} className="cursor-pointer bg-white hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 border inline-flex transition-colors shadow-sm font-bold text-gray-700">
                     <Camera size={16} /> 上傳/拍攝照片
@@ -965,6 +1111,13 @@ const App: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg font-bold flex items-center gap-2 z-50 animate-fadeIn fade-out duration-300">
+          <Activity size={20} />
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 };
