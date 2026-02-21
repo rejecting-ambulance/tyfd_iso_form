@@ -37,6 +37,8 @@ jobs:
           # you usually need to set base path in vite config.
           # For now, we assume root or handled by vite config relative paths.
           CI: true
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_APP_SCRIPT_URL: ${{ secrets.GOOGLE_APP_SCRIPT_URL }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
