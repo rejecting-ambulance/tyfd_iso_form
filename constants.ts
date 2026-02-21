@@ -69,5 +69,5 @@ export const MEDIC_SYSTEM_PROMPT = `你是一名火場事故安全官 (ISO)。�
 - 行動：...`;
 
 // GAS Web App URL
-export const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwCbAcSTVCEpCBf4QTNZbnS2Nr8uc3xohiMaHD_OaS2L6-CF99hT5HMPqjCYQPFtrg/exec';
+export const GAS_WEB_APP_URL = process.env.GOOGLE_APP_SCRIPT_URL;
 
