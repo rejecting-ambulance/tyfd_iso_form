@@ -454,7 +454,7 @@ const App: React.FC = () => {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [loginUnit, setLoginUnit] = useState('');
+  const [loginUnit, setLoginUnit] = useState('訪客');
   const [loginName, setLoginName] = useState('');
 
   const fileRefS1 = useRef<HTMLInputElement>(null);
@@ -573,14 +573,23 @@ const App: React.FC = () => {
                 label="ISO 單位"
                 value={loginUnit}
                 onChange={(e) => { setLoginUnit(e.target.value); setLoginName(''); }}
-                options={[{ value: '', label: '請選擇單位' }, ...unitOptions]}
+                options={[{ value: '訪客', label: '訪客' }, ...unitOptions]}
               />
-              <SelectField
-                label="任務編組 / 人員"
-                value={loginName}
-                onChange={(e) => setLoginName(e.target.value)}
-                options={[{ value: '', label: '請選擇人員' }, ...getPersonnelOptions(loginUnit)]}
-              />
+              {loginUnit === '訪客' ? (
+                <InputField
+                  label="姓名 (自由輸入)"
+                  value={loginName}
+                  onChange={(e) => setLoginName(e.target.value)}
+                  placeholder="請輸入姓名"
+                />
+              ) : (
+                <SelectField
+                  label="任務編組 / 人員"
+                  value={loginName}
+                  onChange={(e) => setLoginName(e.target.value)}
+                  options={[{ value: '', label: '請選擇人員' }, ...getPersonnelOptions(loginUnit)]}
+                />
+              )}
             </div>
 
             {loginError && (
@@ -733,9 +742,13 @@ const App: React.FC = () => {
     <div className="space-y-6 pb-20 animate-fadeIn bg-white">
       <SectionTitle icon={User} title="1. 基本資訊" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex gap-2 w-full">
-          <SelectField label="ISO 單位" value={formData.isoUnit || ''} onChange={(e) => { updateField('isoUnit', e.target.value); updateField('isoName', ''); }} options={[{ value: '', label: '單位' }, ...unitOptions]} className="flex-1" />
-          <SelectField label="任務編組 / 人員" value={formData.isoName || ''} onChange={(e) => updateField('isoName', e.target.value)} options={[{ value: '', label: '人員' }, ...getPersonnelOptions(formData.isoUnit)]} className="flex-1" />
+        <div className="flex flex-col md:flex-row gap-2 w-full">
+          <SelectField label="ISO 單位" value={formData.isoUnit || '訪客'} onChange={(e) => { updateField('isoUnit', e.target.value); updateField('isoName', ''); }} options={[{ value: '訪客', label: '訪客' }, ...unitOptions]} className="flex-1" />
+          {(!formData.isoUnit || formData.isoUnit === '訪客') ? (
+            <InputField label="任務編組 / 人員 (自由輸入)" value={formData.isoName || ''} onChange={(e) => updateField('isoName', e.target.value)} className="flex-1" />
+          ) : (
+            <SelectField label="任務編組 / 人員" value={formData.isoName || ''} onChange={(e) => updateField('isoName', e.target.value)} options={[{ value: '', label: '人員' }, ...getPersonnelOptions(formData.isoUnit)]} className="flex-1" />
+          )}
         </div>
         <TimeRecorder label="抵達現場時間" value={formData.arrivalTime} onChange={(val) => updateField('arrivalTime', val)} />
       </div>
