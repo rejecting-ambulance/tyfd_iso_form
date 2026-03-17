@@ -1,31 +1,7 @@
 
-import { GoogleGenAI } from "@google/genai";
 import { FormDataState, ReconSide, MedicRecord } from './types';
 
-// Lazy initialization: 延遲初始化，讓應用程式可以在沒有 API key 的情況下載入
-let aiClient: GoogleGenAI | null = null;
-
-const getAIClient = (): GoogleGenAI => {
-  if (aiClient) {
-    return aiClient;
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'undefined') {
-    throw new Error(
-      "❌ API Key 未設定\n\n" +
-      "請在專案根目錄建立 .env 檔案並加入：\n" +
-      "GEMINI_API_KEY=你的_API_金鑰\n\n" +
-      "如何取得 API Key：\n" +
-      "前往 https://aistudio.google.com/apikey 取得免費的 Gemini API Key"
-    );
-  }
-
-  aiClient = new GoogleGenAI({ apiKey });
-  return aiClient;
-};
-
-const getFireDescription = (code: string) => {
+// Removed getAIClient as we now call Netlify functions
   if (code === '1') return '火光(1)';
   if (code === '2') return '竄窗(2)';
   if (code === '3') return '延燒潛勢(3)';
@@ -67,16 +43,25 @@ export const generateISOAnalysis = async (formData: FormDataState): Promise<stri
     }
   });
 
-  const ai = getAIClient();
-  const response = await ai.models.generateContent({
-    model: DEFAULT_AI_MODEL,
-    contents: { parts },
-    config: {
-      systemInstruction: ISO_SYSTEM_PROMPT,
-    },
+  const response = await fetch('/.netlify/functions/ask-ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: DEFAULT_AI_MODEL,
+      contents: { parts },
+      config: {
+        systemInstruction: ISO_SYSTEM_PROMPT,
+      }
+    })
   });
 
-  return response.text || "分析失敗，無法取得內容。";
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || "分析失敗，API 發生錯誤。");
+  }
+
+  const data = await response.json();
+  return data.text || "分析失敗，無法取得內容。";
 };
 
 export const generateMedicAnalysis = async (row: MedicRecord): Promise<string> => {
@@ -93,14 +78,23 @@ export const generateMedicAnalysis = async (row: MedicRecord): Promise<string> =
     }
   }
 
-  const ai = getAIClient();
-  const response = await ai.models.generateContent({
-    model: DEFAULT_AI_MODEL,
-    contents: { parts },
-    config: {
-      systemInstruction: MEDIC_SYSTEM_PROMPT,
-    },
+  const response = await fetch('/.netlify/functions/ask-ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: DEFAULT_AI_MODEL,
+      contents: { parts },
+      config: {
+        systemInstruction: MEDIC_SYSTEM_PROMPT,
+      }
+    })
   });
 
-  return response.text || "分析失敗，無法取得內容。";
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || "分析失敗，API 發生錯誤。");
+  }
+
+  const data = await response.json();
+  return data.text || "分析失敗，無法取得內容。";
 };
