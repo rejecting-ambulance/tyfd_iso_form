@@ -2,6 +2,7 @@
 import { FormDataState, ReconSide, MedicRecord } from './types';
 
 // Removed getAIClient as we now call Netlify functions
+const getFireDescription = (code: string) => {
   if (code === '1') return '火光(1)';
   if (code === '2') return '竄窗(2)';
   if (code === '3') return '延燒潛勢(3)';
